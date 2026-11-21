@@ -22,6 +22,7 @@ spec:
           "pip install -r requirements.txt", "python -m pip install -r requirements.txt",
           "git status", "git diff"
         ] || request.args.command.matches("^(python -m )?pip install [A-Za-z0-9_.-]+(==[0-9][A-Za-z0-9.]*)?$")
+        || request.args.command.matches("^git clone https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+([.]git)?/?$")
       message: "Command is not on the shell allowlist"
   validationActions: [Deny]
 
