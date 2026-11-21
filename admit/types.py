@@ -101,6 +101,7 @@ class Event:
     policy: str | None
     reason: str
     pending_id: str | None = None  # set while a WARN call waits for a human
+    model: str = ""  # "provider/id" of the model that made the call, if known
 
 
 class EventSink(Protocol):
