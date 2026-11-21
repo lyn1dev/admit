@@ -93,6 +93,9 @@ class HookError(Exception):
     """Internal failure: becomes a deny (exit 2)."""
 
 
+_DEFAULTS_TO_WORKSPACE = frozenset({"fs.list_directory", "fs.search_files"})
+
+
 def _workspace(payload: dict[str, Any]) -> str:
     paths = payload.get("workspacePaths")
     if isinstance(paths, list) and paths and isinstance(paths[0], str) and paths[0]:
@@ -174,6 +177,10 @@ def map_call(harness: str, payload: dict[str, Any]) -> list[dict[str, Any]] | No
         if v is None:
             continue
         values[out_key] = v if isinstance(v, list) else [v]
+    if "path" not in values and tool in _DEFAULTS_TO_WORKSPACE:
+        # glob / grep_search / list_dir without a directory search the workspace
+        # (the harness default), so say so instead of sending no path at all.
+        values["path"] = ["."]
     if not values:
         # Mapped tool but no usable arg (e.g. list_dir with no path): the
         # server still decides, with empty args.
