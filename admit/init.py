@@ -550,6 +550,15 @@ def run_init(
     """The ``admit init`` command. Returns the process exit code."""
     console = console or Console(highlight=False)
     project = Path(project).resolve()
+    # In the home folder, .gemini/.claude/.agents settings ARE the global harness
+    # config: wiring them would route every session on the machine through Admit.
+    if not print_only and (project == Path.home().resolve() or project == Path(project.anchor)):
+        console.print(
+            f"[red]Refusing to set up {project}:[/] that is your home folder or a drive root, "
+            "where harness settings are global.\n"
+            "Make a project folder first, e.g.  [bold]mkdir admit-demo && cd admit-demo[/]"
+        )
+        return 2
     try:
         chosen = [normalise(h) for h in harnesses or []]
     except ValueError as exc:
