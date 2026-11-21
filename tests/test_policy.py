@@ -80,6 +80,7 @@ def test_loads_both_shipped_policy_files(loaded: dict[str, list[Policy]]) -> Non
         "pip-install-needs-requirements",
         "fs-read-confined",
         "no-dotenv-reads",
+        "harness-status-updates",
     ]
     assert [policy.name for policy in loaded["naive"]] == [
         "coding-agent-shell-basic",
@@ -433,3 +434,12 @@ def test_caller_and_tool_globs(tmp_path: Path) -> None:
     assert evaluate(request, policies).verdict is Verdict.ALLOW
     other = ToolRequest("any-agent", "shell.run", {"command": "git status"})
     assert evaluate(other, policies).verdict is Verdict.DENY
+
+
+def test_only_the_status_line_builtin_is_granted(loaded: dict[str, list[Policy]]) -> None:
+    baseline = loaded["baseline"]
+    topic = ToolRequest("coding-agent", "builtin.update_topic", {"title": "x"})
+    allowed = evaluate(topic, baseline)
+    assert allowed.verdict is Verdict.ALLOW
+    for tool in ("builtin.write_todos", "builtin.browser_click", "builtin.run_shell_command"):
+        assert evaluate(ToolRequest("coding-agent", tool, {}), baseline).verdict is Verdict.DENY

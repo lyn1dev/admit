@@ -82,3 +82,19 @@ spec:
     - expression: '!request.args.path.matches("(^|[/\\\\])[.]env$")'
       message: "Dotenv files are never readable by the coding agent"
   validationActions: [Deny]
+
+---
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: harness-status-updates
+spec:
+  match:
+    callers: ["coding-agent"]
+    # Gemini CLI's update_topic only sets the title/status line in its own UI: no
+    # file, shell or network access. Granted so default-deny doesn't flag it every run.
+    tools: ["builtin.update_topic"]
+  validations:
+    - expression: "true"
+      message: "never fails"
+  validationActions: [Deny]

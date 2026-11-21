@@ -107,22 +107,46 @@ function el(tag, cls, text) {
 }
 function code(text) { return el("code", "", text); }
 
+// Plain-English verb per policy tool: [past tense, infinitive].
+function verbs(tool) {
+  const t = String(tool || "");
+  if (t === "shell.run") return ["ran", "run"];
+  if (/^fs\.read/.test(t)) return ["read", "read"];
+  if (/^fs\.(write|create)/.test(t)) return ["wrote", "write"];
+  if (/^fs\.(edit|move)/.test(t)) return ["edited", "edit"];
+  if (/^fs\.(list|directory)/.test(t)) return ["listed", "list"];
+  if (/^fs\.search/.test(t)) return ["searched", "search"];
+  if (t === "net.fetch") return ["fetched", "fetch"];
+  if (t === "net.search") return ["searched the web for", "search the web for"];
+  return null;
+}
+
+// What to show after the verb. Unknown tools show the tool name, not raw JSON args.
+function target(ev) {
+  if (!verbs(ev.tool)) return ev.tool;
+  const s = String(ev.summary || ev.tool);
+  return s.length > 90 ? s.slice(0, 89) + "…" : s;
+}
+
 function headline(ev) {
   const t = el("div", "title");
   const who = ev.caller || "agent";
+  const v = verbs(ev.tool);
+  const past = v ? v[0] : "used";
+  const inf = v ? v[1] : "use";
   switch (ev.verdict) {
     case "ALLOW":
-      t.append("Allowed: " + who + " ran ", code(ev.summary || ev.tool)); break;
+      t.append("Allowed: " + who + " " + past + " ", code(target(ev))); break;
     case "DENY":
-      t.append("Blocked: " + who + " tried " + ev.tool + " ", code(ev.summary)); break;
+      t.append("Blocked: " + who + " tried to " + inf + " ", code(target(ev))); break;
     case "WARN":
-      t.append("Needs approval: " + who + " wants to run " + ev.tool + " ", code(ev.summary)); break;
+      t.append("Needs approval: " + who + " wants to " + inf + " ", code(target(ev))); break;
     case "WOULD_DENY":
-      t.append("Would have blocked (audit mode): " + who + " ran " + ev.tool + " ", code(ev.summary)); break;
+      t.append("Would have blocked (audit mode): " + who + " " + past + " ", code(target(ev))); break;
     case "PIN_MISMATCH":
       t.append("Tool changed since it was pinned: " + ev.tool + " (" + who + ")"); break;
     default:
-      t.append(String(ev.verdict) + ": " + who + " " + ev.tool + " ", code(ev.summary));
+      t.append(String(ev.verdict) + ": " + who + " " + ev.tool + " ", code(target(ev)));
   }
   return t;
 }
