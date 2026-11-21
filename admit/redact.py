@@ -46,7 +46,7 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ),
     (
         "github token",
-        re.compile(r"(?<![A-Za-z0-9_])(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}"),
+        re.compile(r"(?<![A-Za-z0-9_])(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}"),
     ),
     (
         "aws access key",

@@ -149,7 +149,10 @@ async def test_secret_in_output_is_redacted_and_counted(tmp_path: Path) -> None:
     assert "[REDACTED]" in result.content[0].text
     assert "sk_test_FAKE_DO_NOT_USE_0000000000" not in result.content[0].text
     assert result.structured_content["stdout"].strip() == "[REDACTED]"
-    assert result.structured_content["redacted"] == 1
+    # The count travels in _meta: structured_content must keep matching the
+    # upstream tool's outputSchema (strict clients reject extra keys).
+    assert "redacted" not in result.structured_content
+    assert (result.meta or {})["admit"]["redacted"] == 1
     assert any(
         item.text == "admit: redacted 1 secret(s)"
         for item in result.content
@@ -215,3 +218,14 @@ async def test_pin_flag_reapproves(tmp_path: Path) -> None:
     assert names == ["shell_run"]
     assert result.is_error is not True
     assert load_pins(pins_path)["shell_run"] != "0" * 64
+
+
+@pytest.mark.asyncio
+async def test_redacted_result_still_passes_client_schema_validation(tmp_path: Path) -> None:
+    gateway, _, _ = _gateway(tmp_path)
+    async with Client(gateway) as client:
+        # call_tool validates structured content against the tool's outputSchema.
+        secret_echo = {"command": "echo sk_test_FAKE_DO_NOT_USE_0000000000"}
+        result = await client.call_tool("shell_run", secret_echo)
+    assert result.is_error is False
+    assert "sk_test_FAKE" not in str(result.structured_content)

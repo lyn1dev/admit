@@ -21,6 +21,7 @@ One command (Windows): put your AI Studio key in `.env` as `GEMINI_API_KEY`, the
 uv sync
 .\demo.ps1                 # Gemini CLI + gemini-3.5-flash-lite; opens the dashboard
 .\demo.ps1 -Harness agy    # Antigravity CLI + GPT-OSS 120B (Google sign-in)
+.\demo.ps1 -Harness mcp    # no model: a scripted MCP client through the /mcp gateway
 ```
 
 It starts `admit serve` (log in `.admit/serve.log`), opens the dashboard, runs the agent on

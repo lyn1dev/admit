@@ -99,3 +99,10 @@ def test_redaction_is_idempotent() -> None:
 
 def test_empty_text_is_a_no_op() -> None:
     assert redact("") == ("", 0)
+
+
+def test_github_token_in_json_is_redacted() -> None:
+    from admit.redact import redact
+
+    text, count = redact('"GITHUB_TOKEN": "ghp_FAKE000000000000000000000000000000"')
+    assert count == 1 and "ghp_" not in text
