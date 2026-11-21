@@ -133,8 +133,12 @@ def _native_separators(text: str) -> str:
 
 
 def _norm(path: Path) -> str:
-    """Case-insensitive on Windows (``os.path.normcase``), exact elsewhere."""
-    return os.path.normcase(os.path.abspath(str(path)))
+    """Case-insensitive on every platform (fail closed).
+
+    Windows and default macOS file systems ignore case, so ``ADMIT.YAML`` *is*
+    ``admit.yaml`` there; on case-sensitive Linux this only over-protects.
+    """
+    return os.path.normcase(os.path.abspath(str(path))).casefold()
 
 
 def _within(child: Path, root: Path) -> bool:

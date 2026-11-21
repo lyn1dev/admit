@@ -169,6 +169,6 @@ def test_symlinks_are_resolved(workspace: Path) -> None:
         pytest.skip("creating symlinks needs privileges on this machine")
     assert resolve_path("link/x.txt", workspace) == resolve_path("real/x.txt", workspace)
     _denied(
-        check(_request("fs.write_file", path="../../link/../.agents/hooks.json"), workspace),
+        check(_request("fs.write_file", path="link/../.agents/hooks.json"), workspace),
         mentions="may not write",
     )
