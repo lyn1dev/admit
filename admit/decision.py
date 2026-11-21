@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape
 
 from admit import policy, selfprotect
 from admit.config import AdmitConfig
@@ -114,9 +115,11 @@ class ConsoleSink:
     def publish(self, event: Event) -> None:
         color = _VERDICT_STYLE.get(event.verdict, "white")
         reason = f" — {event.reason}" if event.reason else ""
+        model = getattr(event, "model", "") or ""
+        model = f"[magenta]{escape(f'[{model}]')}[/] " if model else ""
         self.console.print(
             f"[{color}]{event.verdict.value:<12}[/] "
-            f"[bold]{event.caller}[/] {event.tool} "
+            f"[bold]{event.caller}[/] {model}{event.tool} "
             f"[dim]{event.summary}[/]"
             f"{reason}"
         )
@@ -136,6 +139,7 @@ class DecisionPoint:
         evaluate: Callable[[ToolRequest, list, Mode], Decision] = policy.evaluate,
         self_protect: Callable[[ToolRequest, Path], Decision | None] = selfprotect.check,
         approvals: Approvals | None = None,
+        observer: Callable[[ToolRequest, Decision], None] | None = None,
     ) -> None:
         self.config = config
         self.policies = policies
@@ -145,6 +149,8 @@ class DecisionPoint:
         self._evaluate = evaluate
         self._self_protect = self_protect
         self.approvals = approvals
+        # Audit-mode learning data (admit.observations); never affects the decision.
+        self.observer = observer
         self._seq = 0
 
     # -- identity ---------------------------------------------------------
@@ -228,6 +234,11 @@ class DecisionPoint:
                 decision.policy,
                 f"admit error: audit append failed: {type(exc).__name__}: {exc}",
             )
+        if self.observer is not None:
+            try:
+                self.observer(request, decision)
+            except Exception:  # noqa: BLE001 - learning data must never deny a call
+                pass
         self._publish(request, decision)
         return decision
 
@@ -248,6 +259,7 @@ class DecisionPoint:
             verdict=decision.verdict,
             policy=decision.policy,
             reason=decision.reason,
+            model=request.model,
         )
 
 

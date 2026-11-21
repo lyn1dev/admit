@@ -274,7 +274,10 @@ def decide(
     if requests is None:
         return True, {"policy": "admit-gateway", "reason": "already checked by the Admit gateway"}
     token = find_token(token_cwd)
-    model = payload.get("modelName") if harness == "antigravity" else payload.get("model")
+    model = payload.get("modelName") if harness == "antigravity" else (
+        payload.get("model")
+        or (f"{harness}/{os.environ['ADMIT_MODEL']}" if os.environ.get("ADMIT_MODEL") else "")
+    )
     if harness == "antigravity":
         model = f"antigravity/{model}" if isinstance(model, str) and model else "antigravity/auto"
     elif not isinstance(model, str):

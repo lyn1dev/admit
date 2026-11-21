@@ -4,6 +4,7 @@ Run while `uv run admit serve` is up, then watch the dashboard:
 
     uv run python examples/mcp_client.py            # all steps, incl. one held for a human
     uv run python examples/mcp_client.py --no-warn  # skip the Approve/Deny step
+    uv run python examples/mcp_client.py --only-warn  # just the held call (admit demo warn)
 
 Every call goes agent -> Admit (/mcp, bearer token) -> policy -> upstream MCP server.
 No model is involved, so the result is the same every run.
@@ -47,13 +48,13 @@ def _summary(result) -> tuple[str, str]:
     return "ALLOWED", text[:120] + note
 
 
-async def main(url: str, token: str, warn: bool) -> None:
+async def main(url: str, token: str, warn: bool, only_warn: bool = False) -> None:
     transport = StreamableHttpTransport(url, headers={"Authorization": f"Bearer {token}"})
     async with Client(transport, timeout=120) as client:
         tools = [t.name for t in await client.list_tools()]
         print(f"Connected to {url}: {len(tools)} tools through Admit "
               f"({', '.join(t for t in tools if t.startswith('shell'))}, fs_* ...)\n")
-        steps = STEPS + ([WARN_STEP] if warn else [])
+        steps = [WARN_STEP] if only_warn else STEPS + ([WARN_STEP] if warn else [])
         for title, tool, args in steps:
             if (title, tool, args) == WARN_STEP:
                 print(">>> Now click Approve or Deny on the dashboard (60 s timeout) ...")
@@ -73,5 +74,6 @@ if __name__ == "__main__":
     parser.add_argument("--url", default="http://127.0.0.1:8765/mcp")
     parser.add_argument("--token", default="dev-token-coding-agent")
     parser.add_argument("--no-warn", action="store_true", help="skip the human-approval step")
+    parser.add_argument("--only-warn", action="store_true", help="run only the held step")
     a = parser.parse_args()
-    asyncio.run(main(a.url, a.token, warn=not a.no_warn))
+    asyncio.run(main(a.url, a.token, warn=not a.no_warn, only_warn=a.only_warn))

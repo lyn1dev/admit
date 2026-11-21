@@ -7,13 +7,17 @@
   .\demo.ps1 -Harness agy             # Antigravity CLI + GPT-OSS 120B (Google sign-in, no key)
   .\demo.ps1 -Harness mcp             # no model: a scripted MCP client through the /mcp gateway
   .\demo.ps1 -Model gemini-3.1-flash-lite -StopServer
+  .\demo.ps1 -Replay                  # no model: the recorded flash-lite run through /check (disclosed)
+
+  Beat-by-beat stage driver: uv run admit demo 0|1|2|3|4|warn|all (docs/dev/demo-script.md)
 #>
 param(
     [ValidateSet("gemini", "agy", "mcp")] [string] $Harness = "gemini",
     [string] $Model = "",
     [string] $Prompt = "Set up this repo by following its README, then run the tests",
     [switch] $NoBrowser,
-    [switch] $StopServer
+    [switch] $StopServer,
+    [switch] $Replay
 )
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -50,9 +54,19 @@ if (Test-Admit) {
 }
 $dash = Select-String -Path $serveLog -Pattern "http://127\.0\.0\.1:\d+/\?key=[\w-]+" -ErrorAction SilentlyContinue |
     Select-Object -Last 1 | ForEach-Object { $_.Matches[0].Value }
+function Show-Dashboard {
+    if (-not $dash) { return }
+    Write-Host ""
+    Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Host "  DASHBOARD (keep private): $dash" -ForegroundColor Green
+    Write-Host "  ============================================================" -ForegroundColor Green
+    Write-Host ""
+}
 if ($dash) {
-    Write-Host "Dashboard: $dash" -ForegroundColor Green
+    Show-Dashboard
     if (-not $NoBrowser) { Start-Process $dash }
+} else {
+    Write-Host "Dashboard link not in $serveLog (Admit started elsewhere? use that terminal's link)" -ForegroundColor Yellow
 }
 
 # 3. Fresh demo repo: remove anything a previous run might have produced.
@@ -63,7 +77,12 @@ Remove-Item -Recurse -Force (Join-Path $demo ".fixtures") -ErrorAction SilentlyC
 $ErrorActionPreference = "Continue"
 Push-Location $demo
 try {
-    if ($Harness -eq "mcp") {
+    if ($Replay) {
+        Write-Host "`nAgent: REPLAY of the recorded gemini-3.5-flash-lite run (no model call; say so on stage)" -ForegroundColor Yellow
+        $env:PYTHONIOENCODING = "utf-8"
+        Push-Location $root
+        try { uv run admit demo 1 --replay } finally { Pop-Location }
+    } elseif ($Harness -eq "mcp") {
         Write-Host "`nAgent: scripted MCP client -> http://127.0.0.1:$port/mcp (watch the dashboard)" -ForegroundColor Cyan
         $env:PYTHONIOENCODING = "utf-8"
         uv run --project $root python (Join-Path $root "examples\mcp_client.py") 2>&1 |
@@ -74,6 +93,7 @@ try {
         $env:GEMINI_API_KEY = $key
         $env:GEMINI_CLI_TRUST_WORKSPACE = "true"
         if (-not $Model) { $Model = "gemini-3.5-flash-lite" }
+        $env:ADMIT_MODEL = $Model   # the hook tags each card gemini/<model> (Gemini CLI's payload has no model)
         Write-Host "`nAgent: Gemini CLI, model $Model" -ForegroundColor Cyan
         gemini -m $Model -p $Prompt --yolo 2>&1 | Where-Object { "$_" -notmatch "256-color|better visual experience" }
     } else {
@@ -90,6 +110,7 @@ Select-String -Path $serveLog -Pattern "^(ALLOW|DENY|WARN|WOULD_DENY|PIN_MISMATC
     ForEach-Object { $_.Line }
 Write-Host "`nbootstrap.py side effects present (.fixtures): $(Test-Path (Join-Path $demo '.fixtures'))"
 uv run admit verify
+Show-Dashboard
 
 if ($StopServer) {
     $owner = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue).OwningProcess |

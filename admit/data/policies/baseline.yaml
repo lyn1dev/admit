@@ -1,0 +1,101 @@
+# Baseline: the hardened policy set the demo converges to.
+#
+# shell.run is an ALLOWLIST of exact commands, not a blocklist and not a pattern
+# with free arguments (arguments are where bypasses hide). Filesystem reads are confined to
+# relative paths inside the workspace and never expose dotenv files.
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: shell-allowlist
+spec:
+  match:
+    callers: ["coding-agent"]
+    tools: ["shell.run"]
+  validations:
+    # Exact commands only. No arguments: `git diff --no-index .env NUL` reads secrets and
+    # `pytest -p <module>` / `pytest -c <file>` load arbitrary code.
+    # A single-package `pip install` is not denied here; the Warn policy below holds it.
+    - expression: >-
+        request.args.command in [
+          "python -m pytest", "python -m pytest -q", "python -m pytest -v",
+          "pytest", "pytest -q", "uv run pytest",
+          "pip install -r requirements.txt", "python -m pip install -r requirements.txt",
+          "git status", "git diff"
+        ] || request.args.command.matches("^(python -m )?pip install [A-Za-z0-9_.-]+(==[0-9][A-Za-z0-9.]*)?$")
+        || request.args.command.matches("^git clone https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+([.]git)?/?$")
+      message: "Command is not on the shell allowlist"
+  validationActions: [Deny]
+
+---
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: pip-install-needs-requirements
+spec:
+  match:
+    callers: ["coding-agent"]
+    tools: ["shell.run"]
+  validations:
+    # Any pip install that is not exactly the requirements file is held for a human.
+    - expression: '!request.args.command.matches("^(python -m )?pip install ") || request.args.command in ["pip install -r requirements.txt", "python -m pip install -r requirements.txt"]'
+      message: "Installing packages outside requirements.txt needs human approval"
+  validationActions: [Warn]
+
+---
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: fs-read-confined
+spec:
+  match:
+    callers: ["coding-agent"]
+    tools:
+      - fs.read_text_file
+      - fs.read_file
+      - fs.list_directory
+      - fs.search_files
+      - fs.directory_tree
+  validations:
+    # No parent traversal.
+    - expression: '!request.args.path.contains("..")'
+      message: "Path traversal is not allowed"
+    # No absolute paths: they can point outside the workspace (C:\, /etc, ~).
+    # CEL cannot resolve symlinks or junctions; the optional confinePath
+    # mutation in an AgentMutatingPolicy performs full resolution.
+    - expression: '!request.args.path.matches("^([A-Za-z]:|/|~)")'
+      message: "Absolute paths are not allowed; use a workspace-relative path"
+  validationActions: [Deny]
+
+---
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: no-dotenv-reads
+spec:
+  match:
+    callers: ["coding-agent"]
+    tools:
+      - fs.read_text_file
+      - fs.read_file
+      - fs.search_files
+  validations:
+    # Blocks any file named exactly .env, on a POSIX or Windows path.
+    - expression: '!request.args.path.matches("(^|[/\\\\])[.]env$")'
+      message: "Dotenv files are never readable by the coding agent"
+  validationActions: [Deny]
+
+---
+apiVersion: agentpolicy.dev/v1alpha1
+kind: AgentValidatingPolicy
+metadata:
+  name: harness-status-updates
+spec:
+  match:
+    callers: ["coding-agent"]
+    # Gemini CLI's update_topic only sets the title/status line in its own UI: no
+    # file, shell or network access. Granted so default-deny doesn't flag it every run.
+    tools: ["builtin.update_topic"]
+  validations:
+    - expression: "true"
+      message: "never fails"
+  validationActions: [Deny]

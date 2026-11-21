@@ -1,0 +1,21 @@
+# Admit configuration, written by `admit init`. Edit freely: re-running
+# `admit init` merges into this file and never removes your changes.
+
+mode: $mode             # audit = allow everything, log WOULD_DENY | enforce = block
+port: 8765              # proxy on /mcp, dashboard on /, hook decisions on /check
+policies:
+  - policies/baseline.yaml
+
+# Bearer token -> caller id. The hook reads the token from .admit/hook-token.
+callers:
+  $token: coding-agent
+
+warn:
+  timeout_seconds: 60   # no human decision in time = deny
+
+# Downstream MCP servers launched by Admit; their tools are exposed as <name>.<tool>.
+upstreams:
+  shell:
+    command: $python
+    args: ["-m", "admit.servers.shell", "--cwd", $project]
+$fs_block

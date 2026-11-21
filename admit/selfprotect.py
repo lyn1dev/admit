@@ -43,7 +43,9 @@ GLOBAL_PROTECTED_WRITE_PATHS: tuple[str, ...] = (
 # anything else is a glob on the file name. ``.env*`` covers ``.env``,
 # ``.env.local``, ``.env.production``, ...
 PROTECTED_READ_PATTERNS: tuple[str, ...] = (
-    ".admit/keys/",
+    ".admit/",      # keys, hook token, audit log, observations
+    "policies/",    # an agent that can read its policy can plan around it
+    "admit.yaml",   # holds the caller tokens
     ".env*",
 )
 
