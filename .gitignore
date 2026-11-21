@@ -1,0 +1,28 @@
+# Private notes - never commit
+BRIEF.md
+CLAUDE.md
+.claude/
+
+# Secrets and local state
+.env
+!demo-repo/.env
+.admit/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Devpost draft (paste into the form)
+DEVPOST.md

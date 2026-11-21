@@ -1,0 +1,37 @@
+[project]
+name = "admit"
+version = "0.1.0"
+description = "Admission control for AI agents: an MCP proxy that checks every tool call against Kyverno-style CEL policies."
+requires-python = ">=3.12"
+dependencies = [
+    "cel-python>=0.5.0",
+    "fastmcp>=4.2.4",
+    "google-adk>=2.15.0",
+    "pynacl>=1.6.2",
+    "pyyaml>=6.0.4",
+    "rich>=15.0.0",
+    "typer>=0.29.2",
+]
+
+[project.scripts]
+admit = "admit.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+bdd_features_base_dir = "features/"
+asyncio_default_fixture_loop_scope = "function"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.5.0",
+    "pytest-bdd>=9.0.1",
+    "ruff>=0.17.6",
+]

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "shell": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-shell"],
+      "env": {
+        "SHELL_ALLOW_ALL": "true"
+      }
+    },
+    "filesystem-c": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\"]
+    },
+    "filesystem-home": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "~"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "ghp_FAKE000000000000000000000000000000"
+      }
+    }
+  }
+}

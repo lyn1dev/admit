@@ -1,0 +1,25 @@
+# Admit configuration: one file for the proxy.
+# `admit init <harness>` generates this from the agent's existing MCP config.
+
+mode: enforce            # enforce | audit (audit = allow everything, log WOULD_DENY)
+port: 8765               # proxy on /mcp, dashboard on /
+policies:
+  - policies/baseline.yaml
+
+# Bearer token -> caller id. Obviously fake dev tokens; real deployments read
+# tokens from the environment or a secret store.
+callers:
+  dev-token-coding-agent: coding-agent
+  dev-token-ci-bot: ci-bot
+
+warn:
+  timeout_seconds: 60    # no human decision in time = deny
+
+# Downstream MCP servers. Their tools are exposed as <name>.<tool>.
+upstreams:
+  fs:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "demo-repo"]
+  shell:
+    command: uv
+    args: ["run", "python", "-m", "admit.servers.shell", "--cwd", "demo-repo"]

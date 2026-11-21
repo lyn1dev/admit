@@ -1,0 +1,16 @@
+{
+  "admit": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project ../.. admit hook --harness antigravity",
+            "timeout": 75
+          }
+        ]
+      }
+    ]
+  }
+}
