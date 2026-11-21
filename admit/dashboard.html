@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admit</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f7; --fg: #111418; --muted: #4a525c; --card: #ffffff; --line: #c9ced6;
+  --allow: #0b6b2e; --allow-bg: #e3f6e9;
+  --deny: #a3121b; --deny-bg: #fde7e8;
+  --warn: #7a5200; --warn-bg: #fff3c2;
+  --would: #0b4f9e; --would-bg: #e1eefd;
+  --pin: #5b2a9e; --pin-bg: #efe6fb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1014; --fg: #f3f5f7; --muted: #b3bac4; --card: #181c22; --line: #3a414b;
+    --allow: #6be38f; --allow-bg: #10301c;
+    --deny: #ff8a90; --deny-bg: #3b1417;
+    --warn: #ffd45e; --warn-bg: #3a2e07;
+    --would: #8cc2ff; --would-bg: #0f2744;
+    --pin: #c9a6ff; --pin-bg: #2a1747;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 24px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 2px solid var(--line);
+  padding: 14px 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; }
+h1 { margin: 0; font-size: 44px; letter-spacing: .5px; }
+.pill { border: 2px solid var(--line); border-radius: 999px; padding: 4px 16px; font-size: 22px; font-weight: 700; }
+.pill.ok { color: var(--allow); background: var(--allow-bg); border-color: var(--allow); }
+.pill.bad { color: var(--deny); background: var(--deny-bg); border-color: var(--deny); }
+.pill.off { color: var(--muted); }
+.counters { margin-left: auto; display: flex; gap: 12px; flex-wrap: wrap; }
+.counter { font-size: 22px; font-weight: 700; padding: 4px 14px; border-radius: 10px; }
+main { padding: 20px 28px 80px; max-width: 1400px; margin: 0 auto; }
+h2 { font-size: 22px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 18px 0 8px; }
+.card { background: var(--card); border: 3px solid var(--c); border-left-width: 18px; border-radius: 14px;
+  padding: 16px 22px; margin: 0 0 16px; }
+.card.v-ALLOW { --c: var(--allow); --cbg: var(--allow-bg); }
+.card.v-DENY { --c: var(--deny); --cbg: var(--deny-bg); }
+.card.v-WARN { --c: var(--warn); --cbg: var(--warn-bg); }
+.card.v-WOULD_DENY { --c: var(--would); --cbg: var(--would-bg); }
+.card.v-PIN_MISMATCH { --c: var(--pin); --cbg: var(--pin-bg); }
+.card.pending { background: var(--cbg); }
+.card.target { outline: 5px solid var(--fg); outline-offset: 3px; }
+.top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.badge { background: var(--cbg); color: var(--c); border: 2px solid var(--c); border-radius: 10px;
+  padding: 2px 12px; font-weight: 800; font-size: 22px; white-space: nowrap; }
+.title { font-size: 30px; font-weight: 700; flex: 1 1 400px; overflow-wrap: anywhere; }
+code { font: 700 .95em ui-monospace, Consolas, monospace; background: var(--cbg, var(--bg)); padding: 1px 8px; border-radius: 6px; }
+.meta { color: var(--muted); font-size: 20px; margin-top: 6px; overflow-wrap: anywhere; }
+.tag { border: 2px solid var(--line); border-radius: 8px; padding: 0 10px; font-size: 18px; color: var(--muted); }
+.advice { margin-top: 10px; padding: 10px 14px; border: 2px dashed var(--c); border-radius: 10px; font-size: 22px; }
+.actions { display: flex; align-items: center; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
+button { font: 800 32px system-ui, sans-serif; padding: 14px 44px; border-radius: 12px; cursor: pointer;
+  border: 3px solid var(--fg); background: var(--card); color: var(--fg); }
+button.approve { background: var(--allow); color: var(--bg); border-color: var(--allow); }
+button.deny { background: var(--deny); color: var(--bg); border-color: var(--deny); }
+button:focus-visible { outline: 4px solid var(--fg); outline-offset: 3px; }
+button:disabled { opacity: .5; cursor: default; }
+.count { font-size: 26px; font-weight: 700; }
+.hint { color: var(--muted); font-size: 18px; }
+.outcome { font-size: 28px; font-weight: 800; margin-top: 12px; }
+.empty { color: var(--muted); padding: 30px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Admit</h1>
+  <span id="live" class="pill off">&#9679; Connecting&hellip;</span>
+  <span id="verify" class="pill off">Verify unavailable</span>
+  <div class="counters" id="counters"></div>
+</header>
+<main>
+  <section id="pendingWrap" hidden>
+    <h2>Waiting for you</h2>
+    <div id="pending"></div>
+  </section>
+  <h2>Live feed</h2>
+  <div id="feed"><p class="empty" id="empty">Waiting for the agent&hellip;</p></div>
+</main>
+<script>
+"use strict";
+const VERDICTS = {
+  ALLOW:        { icon: "✔", word: "ALLOWED" },
+  DENY:         { icon: "✖", word: "BLOCKED" },
+  WARN:         { icon: "⚠", word: "NEEDS YOU" },
+  WOULD_DENY:   { icon: "ⓘ", word: "AUDIT" },
+  PIN_MISMATCH: { icon: "⛔", word: "TOOL CHANGED" }
+};
+const $ = (id) => document.getElementById(id);
+const feed = $("feed"), pendingBox = $("pending"), pendingWrap = $("pendingWrap");
+const seen = new Set();
+const pending = new Map();   // pending_id -> {card, deadline, countEl, actionsEl}
+const counts = {};
+let es = null;
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+function code(text) { return el("code", "", text); }
+
+function headline(ev) {
+  const t = el("div", "title");
+  const who = ev.caller || "agent";
+  switch (ev.verdict) {
+    case "ALLOW":
+      t.append("Allowed: " + who + " ran ", code(ev.summary || ev.tool)); break;
+    case "DENY":
+      t.append("Blocked: " + who + " tried " + ev.tool + " ", code(ev.summary)); break;
+    case "WARN":
+      t.append("Needs approval: " + who + " wants to run " + ev.tool + " ", code(ev.summary)); break;
+    case "WOULD_DENY":
+      t.append("Would have blocked (audit mode): " + who + " ran " + ev.tool + " ", code(ev.summary)); break;
+    case "PIN_MISMATCH":
+      t.append("Tool changed since it was pinned: " + ev.tool + " (" + who + ")"); break;
+    default:
+      t.append(String(ev.verdict) + ": " + who + " " + ev.tool + " ", code(ev.summary));
+  }
+  return t;
+}
+
+function timeOf(ts) {
+  const d = new Date(ts);
+  return isNaN(d) ? String(ts || "") : d.toLocaleTimeString();
+}
+
+function buildCard(ev) {
+  const v = VERDICTS[ev.verdict] || { icon: "?", word: String(ev.verdict) };
+  const card = el("div", "card v-" + ev.verdict);
+  const top = el("div", "top");
+  top.append(el("span", "badge", v.icon + " " + v.word), headline(ev));
+  card.append(top);
+  const bits = [];
+  if (ev.policy) bits.push("Policy: " + ev.policy);
+  if (ev.reason) bits.push(ev.reason);
+  const meta = el("div", "meta");
+  meta.append(bits.join(" — ") || " ");
+  if (ev.model) { meta.append(" "); meta.append(el("span", "tag", ev.model)); }
+  meta.append(" ", el("span", "", " · " + timeOf(ev.ts)));
+  card.append(meta);
+  return card;
+}
+
+function buildPending(ev) {
+  const card = buildCard(ev);
+  card.classList.add("pending");
+  if (ev.advice) {
+    const a = ev.advice;
+    const adv = el("div", "advice");
+    adv.append(el("strong", "", "Reviewer: "),
+      (a.recommendation || "?") + (a.risk ? " (risk: " + a.risk + ")" : "") + (a.reason ? " — " + a.reason : ""));
+    card.append(adv);
+  }
+  const actions = el("div", "actions");
+  const yes = el("button", "approve", "Approve (A)");
+  const no = el("button", "deny", "Deny (D)");
+  const count = el("span", "count", "");
+  yes.onclick = () => decide(ev.pending_id, true);
+  no.onclick = () => decide(ev.pending_id, false);
+  actions.append(yes, no, count);
+  card.append(actions);
+  pending.set(ev.pending_id, { card, deadline: ev.deadline, countEl: count, actionsEl: actions, btns: [yes, no] });
+  return card;
+}
+
+async function decide(id, approve) {
+  const p = pending.get(id);
+  if (!p) return;
+  p.btns.forEach((b) => { b.disabled = true; });
+  try {
+    const r = await fetch((approve ? "/approve/" : "/deny/") + encodeURIComponent(id),
+      { method: "POST", credentials: "same-origin" });
+    if (r.status === 404) settle(id, "gone");
+    else if (!r.ok) { p.btns.forEach((b) => { b.disabled = false; }); }
+  } catch (e) { p.btns.forEach((b) => { b.disabled = false; }); }
+}
+
+function settle(id, status, by) {
+  const p = pending.get(id);
+  if (!p) return;
+  pending.delete(id);
+  const text = status === "approved" ? "✔ Approved by " + by
+    : status === "denied" ? "✖ Denied by " + by
+    : status === "timeout" ? "⏱ Timed out — denied"
+    : "Already resolved";
+  p.actionsEl.replaceWith(el("div", "outcome", text));
+  p.card.classList.remove("pending", "target");
+  addToFeed(p.card);
+  refreshPending();
+}
+
+function addToFeed(card) {
+  const empty = $("empty"); if (empty) empty.remove();
+  feed.prepend(card);
+  while (feed.children.length > 300) feed.lastChild.remove();
+}
+
+function refreshPending() {
+  pendingWrap.hidden = pending.size === 0;
+  let first = true;
+  for (const p of pending.values()) { p.card.classList.toggle("target", first); first = false; }
+}
+
+function renderCounters() {
+  const box = $("counters");
+  box.textContent = "";
+  for (const name of Object.keys(VERDICTS)) {
+    const c = el("span", "counter v-" + name, VERDICTS[name].icon + " " + (counts[name] || 0));
+    c.style.background = "var(--" + ({ALLOW:"allow",DENY:"deny",WARN:"warn",WOULD_DENY:"would",PIN_MISMATCH:"pin"})[name] + "-bg)";
+    c.style.color = "var(--" + ({ALLOW:"allow",DENY:"deny",WARN:"warn",WOULD_DENY:"would",PIN_MISMATCH:"pin"})[name] + ")";
+    c.title = VERDICTS[name].word;
+    box.append(c);
+  }
+}
+
+function onEvent(ev) {
+  const key = ev.seq + ":" + (ev.pending_id || "");
+  if (seen.has(key)) return;
+  seen.add(key);
+  counts[ev.verdict] = (counts[ev.verdict] || 0) + 1;
+  renderCounters();
+  if (ev.verdict === "WARN" && ev.pending_id) {
+    pendingBox.append(buildPending(ev));
+    refreshPending();
+    tick();
+  } else {
+    addToFeed(buildCard(ev));
+  }
+  scheduleVerify();
+}
+
+function onMessage(msg) {
+  if (msg.type === "update") settle(msg.pending_id, msg.status, msg.by);
+  else onEvent(msg);
+}
+
+function tick() {
+  const now = Date.now() / 1000;
+  for (const p of pending.values()) {
+    if (p.deadline) p.countEl.textContent = "⏱ " + Math.max(0, Math.ceil(p.deadline - now)) + "s left";
+  }
+}
+setInterval(tick, 500);
+
+function connect() {
+  es = new EventSource("/events");
+  es.onopen = () => { const l = $("live"); l.className = "pill ok"; l.textContent = "● Live"; };
+  es.onmessage = (m) => { try { onMessage(JSON.parse(m.data)); } catch (e) { /* ignore bad frame */ } };
+  es.onerror = () => {
+    const l = $("live"); l.className = "pill bad"; l.textContent = "● Reconnecting…";
+    es.close();
+    setTimeout(connect, 1500);
+  };
+}
+
+let vTimer = null;
+function scheduleVerify() { if (!vTimer) vTimer = setTimeout(() => { vTimer = null; checkVerify(); }, 1500); }
+async function checkVerify() {
+  const b = $("verify");
+  try {
+    const r = await fetch("/verify", { credentials: "same-origin" });
+    const j = await r.json();
+    if (j.ok === true) { b.className = "pill ok"; b.textContent = "✔ Log verified"; }
+    else if (j.ok === false) { b.className = "pill bad"; b.textContent = "✖ " + (j.message || "Log verification failed"); }
+    else { b.className = "pill off"; b.textContent = "Verify unavailable"; }
+  } catch (e) { b.className = "pill off"; b.textContent = "Verify unavailable"; }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k !== "a" && k !== "d") return;
+  const first = pending.keys().next();
+  if (!first.done) decide(first.value, k === "a");
+});
+
+renderCounters();
+checkVerify();
+setInterval(checkVerify, 15000);
+connect();
+</script>
+</body>
+</html>
