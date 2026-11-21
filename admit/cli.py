@@ -25,6 +25,7 @@ def serve(
     mode: str | None = typer.Option(None, help="enforce | audit (overrides admit.yaml)"),
     port: int | None = typer.Option(None, help="override admit.yaml port"),
     pin: bool = typer.Option(False, "--pin", help="record/re-approve tool pins (.admit/pins.json)"),
+    open_browser: bool = typer.Option(False, "--open", help="open the dashboard in the browser"),
 ) -> None:
     """Run the MCP proxy on http://127.0.0.1:<port>/mcp with the dashboard on /."""
     # Heavy imports stay inside the command so `admit --help` stays instant.
@@ -134,7 +135,53 @@ def serve(
         fg=typer.colors.CYAN,
         bold=True,
     )
+    if open_browser:
+        import threading
+        import webbrowser
+
+        url = f"http://127.0.0.1:{config.port}/?key={dashboard_key}"
+        threading.Timer(1.5, webbrowser.open, args=(url,)).start()
     uvicorn.run(application, host="127.0.0.1", port=config.port, log_level="info")
+
+
+@app.command()
+def run(
+    config_path: Path = typer.Option(
+        Path("admit.yaml"), "--config", "-c", help="path to admit.yaml"
+    ),
+    audit: bool = typer.Option(False, "--audit", help="first-time setup in audit mode"),
+    no_open: bool = typer.Option(False, "--no-open", help="don't open the dashboard"),
+) -> None:
+    """Set up this folder if needed (harness picker), then start Admit and open the dashboard."""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    console = Console()
+    console.print(
+        Panel.fit(
+            "[bold]Admit[/] - every tool call your coding agent makes is checked first.\n"
+            "[dim]deterministic CEL policies - fail-closed - signed audit log[/]",
+            border_style="green",
+        )
+    )
+    if not config_path.exists():
+        from admit.init import run_init
+
+        console.print("[bold]No admit.yaml here yet - let's set this folder up.[/]\n")
+        code = run_init(
+            Path("."), [], yes=False, enforce=not audit, dry_run=False, print_only=False
+        )
+        if code:
+            raise typer.Exit(code)
+        console.print()
+    serve(
+        config_path=config_path,
+        policies=None,
+        mode=None,
+        port=None,
+        pin=False,
+        open_browser=not no_open,
+    )
 
 
 @app.command()
