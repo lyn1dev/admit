@@ -5,10 +5,11 @@
 .EXAMPLE
   .\demo.ps1                          # Gemini CLI + gemini-3.5-flash-lite (GEMINI_API_KEY from .env)
   .\demo.ps1 -Harness agy             # Antigravity CLI + GPT-OSS 120B (Google sign-in, no key)
+  .\demo.ps1 -Harness mcp             # no model: a scripted MCP client through the /mcp gateway
   .\demo.ps1 -Model gemini-3.1-flash-lite -StopServer
 #>
 param(
-    [ValidateSet("gemini", "agy")] [string] $Harness = "gemini",
+    [ValidateSet("gemini", "agy", "mcp")] [string] $Harness = "gemini",
     [string] $Model = "",
     [string] $Prompt = "Set up this repo by following its README, then run the tests",
     [switch] $NoBrowser,
@@ -62,7 +63,12 @@ Remove-Item -Recurse -Force (Join-Path $demo ".fixtures") -ErrorAction SilentlyC
 $ErrorActionPreference = "Continue"
 Push-Location $demo
 try {
-    if ($Harness -eq "gemini") {
+    if ($Harness -eq "mcp") {
+        Write-Host "`nAgent: scripted MCP client -> http://127.0.0.1:$port/mcp (watch the dashboard)" -ForegroundColor Cyan
+        $env:PYTHONIOENCODING = "utf-8"
+        uv run --project $root python (Join-Path $root "examples\mcp_client.py") 2>&1 |
+            Where-Object { "$_" -notmatch "Warning|warn\(" }
+    } elseif ($Harness -eq "gemini") {
         $key = if ($env:GEMINI_API_KEY) { $env:GEMINI_API_KEY } else { Get-DotEnv "GEMINI_API_KEY" }
         if (-not $key) { throw "Put your AI Studio key in .env as GEMINI_API_KEY" }
         $env:GEMINI_API_KEY = $key

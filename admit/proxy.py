@@ -138,9 +138,10 @@ def redact_result(result: ToolResult) -> ToolResult:
     structured, structured_total = _redact_value(result.structured_content)
     total = max(text_total, structured_total)
     if total:
-        if not isinstance(structured, dict):
-            structured = {}
-        structured["redacted"] = total
+        # Never add keys to structured_content: it must keep matching the upstream
+        # tool's outputSchema (often additionalProperties: false), or strict MCP
+        # clients reject the whole result. The count goes in _meta and in a text note.
+        result.meta = {**(result.meta or {}), "admit": {"redacted": total}}
         content.append({"type": "text", "text": f"admit: redacted {total} secret(s)"})
 
     result.content = content

@@ -19,7 +19,8 @@ warn:
 upstreams:
   fs:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "demo-repo"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    cwd: demo-repo         # relative paths (README.md) resolve inside the demo repo
   shell:
     command: uv
     args: ["run", "python", "-m", "admit.servers.shell", "--cwd", "demo-repo"]
