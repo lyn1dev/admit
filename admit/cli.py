@@ -28,11 +28,15 @@ def serve(
 ) -> None:
     """Run the MCP proxy on http://127.0.0.1:<port>/mcp with the dashboard on /."""
     # Heavy imports stay inside the command so `admit --help` stays instant.
+    import secrets
+
     import uvicorn
 
+    from admit import audit as audit_mod
     from admit.audit import AuditLog
     from admit.config import load_config
-    from admit.decision import ConsoleSink, DecisionPoint, NullAudit
+    from admit.dashboard import DashboardApprovals, DashboardSink, routes
+    from admit.decision import ConsoleSink, DecisionPoint, FanoutSink, NullAudit
     from admit.policy import load_policies
     from admit.proxy import build_gateway
     from admit.server import create_app
@@ -85,18 +89,38 @@ def serve(
         )
         audit = NullAudit()
 
-    sink = ConsoleSink()
+    dashboard_sink = DashboardSink()
+    approvals = DashboardApprovals(dashboard_sink)
+    dashboard_key = secrets.token_urlsafe(24)
     decision_point = DecisionPoint(
-        config, loaded_policies, audit, sink, workspace=Path.cwd()
+        config,
+        loaded_policies,
+        audit,
+        FanoutSink(ConsoleSink(), dashboard_sink),
+        workspace=Path.cwd(),
+        approvals=approvals,
+    )
+    log_path = getattr(audit, "path", None)
+    dashboard_routes = routes(
+        dashboard_sink,
+        approvals,
+        dashboard_key=dashboard_key,
+        verify_fn=(lambda: audit_mod.verify(log_path)) if log_path else None,
     )
     gateway = build_gateway(
         config, decision_point, pins_path=Path(".admit/pins.json"), pin=pin
     )
-    application = create_app(config, decision_point, gateway)
+    application = create_app(config, decision_point, gateway, extra_routes=dashboard_routes)
 
     typer.echo(
         f"admit serve: MCP gateway on http://127.0.0.1:{config.port}/mcp "
-        f"(dashboard http://127.0.0.1:{config.port}/, mode {config.mode.value})"
+        f"(mode {config.mode.value})"
+    )
+    typer.secho(
+        f"dashboard (keep this link private): "
+        f"http://127.0.0.1:{config.port}/?key={dashboard_key}",
+        fg=typer.colors.CYAN,
+        bold=True,
     )
     uvicorn.run(application, host="127.0.0.1", port=config.port, log_level="info")
 

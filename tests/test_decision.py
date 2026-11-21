@@ -245,3 +245,78 @@ def test_null_audit_and_console_sink_are_safe() -> None:
             reason="not on the allowlist",
         )
     )
+
+
+# -- WARN hold through the dashboard approvals ------------------------------
+
+
+class FakeApprovals:
+    def __init__(self, answer: bool | Exception) -> None:
+        self.answer = answer
+        self.requested: list[tuple[Event, float]] = []
+
+    async def request(self, event: Event, advice: dict | None, timeout_s: float) -> bool:
+        self.requested.append((event, timeout_s))
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+    def resolve(self, pending_id: str, approved: bool, by: str) -> None:
+        return None
+
+
+def _warn(request: ToolRequest, policies: list, mode: Mode) -> Decision:
+    return Decision(Verdict.WARN, "pip-install", "single-package install")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "verdict"),
+    [(True, Verdict.ALLOW), (False, Verdict.DENY), (RuntimeError("ui crashed"), Verdict.DENY)],
+)
+async def test_warn_is_held_for_a_human(answer: bool | Exception, verdict: Verdict) -> None:
+    approvals = FakeApprovals(answer)
+    audit = RecordingAudit()
+    dp = DecisionPoint(
+        _config(warn_timeout_seconds=7),
+        [],
+        audit,
+        RecordingSink(),
+        workspace=WORKSPACE,
+        evaluate=_warn,
+        self_protect=lambda request, workspace: None,
+        approvals=approvals,
+    )
+    decision = await dp.decide(_request())
+    assert decision.verdict is verdict
+    assert decision.policy == "pip-install"
+    event, timeout = approvals.requested[0]
+    assert event.verdict is Verdict.WARN and timeout == 7.0
+    # The hold and its outcome are both in the audit log.
+    assert [d.verdict for _, d in audit.entries] == [Verdict.WARN, verdict]
+
+
+@pytest.mark.asyncio
+async def test_warn_hold_fails_closed_when_audit_fails() -> None:
+    approvals = FakeApprovals(True)
+    dp = DecisionPoint(
+        _config(),
+        [],
+        RecordingAudit(fail=True),
+        RecordingSink(),
+        workspace=WORKSPACE,
+        evaluate=_warn,
+        self_protect=lambda request, workspace: None,
+        approvals=approvals,
+    )
+    decision = await dp.decide(_request())
+    assert decision.verdict is Verdict.DENY
+    assert approvals.requested == []  # never shown to a human, never run
+
+
+def test_summary_redacts_secrets() -> None:
+    from admit.decision import summarize_args
+
+    summary = summarize_args({"command": "echo sk_test_FAKE_DO_NOT_USE_0000000000"})
+    assert "sk_test" not in summary
+    assert "[REDACTED]" in summary

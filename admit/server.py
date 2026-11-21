@@ -11,7 +11,7 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Mount, Route
+from starlette.routing import BaseRoute, Mount, Route
 
 from admit.config import AdmitConfig
 from admit.decision import DecisionPoint, caller_for_token
@@ -22,18 +22,21 @@ def create_app(
     config: AdmitConfig,
     decision_point: DecisionPoint,
     gateway: Any,
+    extra_routes: list[BaseRoute] | None = None,
 ) -> Starlette:
     """Build the Starlette app: /check, /mcp gateway, dashboard routes.
 
     The gateway's own ASGI app is mounted at the root so its ``/mcp`` path is
     served as ``/mcp`` (mounting it under ``/mcp`` would give ``/mcp/mcp``), and
     its lifespan is handed to the parent: without it the streamable-HTTP session
-    manager never starts and every request 500s.
+    manager never starts and every request 500s. ``extra_routes`` (the
+    dashboard) are matched before that catch-all mount.
     """
     mcp_app = gateway.http_app(path="/mcp")
     app = Starlette(
         routes=[
             Route("/check", check, methods=["POST"]),
+            *(extra_routes or []),
             Mount("/", app=mcp_app),
         ],
         lifespan=mcp_app.lifespan,

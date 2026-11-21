@@ -22,7 +22,8 @@ from rich.console import Console
 
 from admit import policy, selfprotect
 from admit.config import AdmitConfig
-from admit.types import Decision, Event, EventSink, Mode, ToolRequest, Verdict
+from admit.redact import redact
+from admit.types import Approvals, Decision, Event, EventSink, Mode, ToolRequest, Verdict
 
 _BEARER_RE = re.compile(r"^bearer[ \t]+(\S+)\s*$", re.IGNORECASE)
 
@@ -57,16 +58,41 @@ def caller_for_token(config: AdmitConfig, auth_header: str) -> str | None:
 
 
 def summarize_args(args: dict[str, Any]) -> str:
-    """A short, human-readable hint for the terminal log (never file contents)."""
+    """A short, human-readable hint for the terminal and dashboard (never file contents).
+
+    Secret patterns are redacted: the summary is shown on screen, often on stage.
+    """
+    text = ""
     for key in _SUMMARY_KEYS:
         value = args.get(key)
         if isinstance(value, str) and value:
-            return value[:120]
+            text = value
+            break
+    else:
+        try:
+            text = json.dumps(args, ensure_ascii=False, default=str) if args else ""
+        except (TypeError, ValueError):  # pragma: no cover - unserializable args
+            text = str(sorted(args))
     try:
-        text = json.dumps(args, ensure_ascii=False, default=str) if args else ""
-    except (TypeError, ValueError):  # pragma: no cover - unserializable args
-        text = str(sorted(args))
+        text, _ = redact(text)
+    except Exception:  # noqa: BLE001 - never show an unredacted value
+        return "[summary unavailable]"
     return text[:120]
+
+
+class FanoutSink:
+    """Publish every event to several sinks (terminal + dashboard). One failing sink
+    never stops the others."""
+
+    def __init__(self, *sinks: EventSink) -> None:
+        self.sinks = sinks
+
+    def publish(self, event: Event) -> None:
+        for sink in self.sinks:
+            try:
+                sink.publish(event)
+            except Exception:  # noqa: BLE001 - display only
+                continue
 
 
 class NullAudit:
@@ -109,6 +135,7 @@ class DecisionPoint:
         workspace: Path,
         evaluate: Callable[[ToolRequest, list, Mode], Decision] = policy.evaluate,
         self_protect: Callable[[ToolRequest, Path], Decision | None] = selfprotect.check,
+        approvals: Approvals | None = None,
     ) -> None:
         self.config = config
         self.policies = policies
@@ -117,6 +144,7 @@ class DecisionPoint:
         self.workspace = Path(workspace)
         self._evaluate = evaluate
         self._self_protect = self_protect
+        self.approvals = approvals
         self._seq = 0
 
     # -- identity ---------------------------------------------------------
@@ -132,7 +160,45 @@ class DecisionPoint:
             decision = self._decide(request)
         except Exception as exc:  # noqa: BLE001 - fail closed on anything
             decision = _error_decision(exc)
+        if decision.verdict is Verdict.WARN:
+            return await self._hold(request, decision)
         return self.record(request, decision)
+
+    async def _hold(self, request: ToolRequest, warn: Decision) -> Decision:
+        """WARN: log the hold, wait for a human on the dashboard, log the outcome.
+
+        Timeout, a missing approval UI or any error is a DENY.
+        """
+        try:
+            self.audit.append(request, warn)
+        except Exception as exc:  # noqa: BLE001 - fail closed on anything
+            return Decision(
+                Verdict.DENY,
+                warn.policy,
+                f"admit error: audit append failed: {type(exc).__name__}: {exc}",
+            )
+        approved = False
+        try:
+            if self.approvals is not None:
+                approved = await self.approvals.request(
+                    self._event(request, warn),
+                    None,
+                    float(self.config.warn_timeout_seconds),
+                )
+        except Exception:  # noqa: BLE001 - fail closed on anything
+            approved = False
+        if approved:
+            final = Decision(
+                Verdict.ALLOW, warn.policy, f"{warn.reason} (approved on the dashboard)", warn.hint
+            )
+        else:
+            final = Decision(
+                Verdict.DENY,
+                warn.policy,
+                f"{warn.reason} (needs human approval: denied or timed out)",
+                warn.hint,
+            )
+        return self.record(request, final)
 
     def _decide(self, request: ToolRequest) -> Decision:
         protected = self._self_protect(request, self.workspace)
@@ -142,14 +208,8 @@ class DecisionPoint:
                 Verdict.DENY, protected.policy, protected.reason, protected.hint
             )
         decision = self._evaluate(request, self.policies, self.config.mode)
-        if decision.verdict is Verdict.WARN:
-            # No approval UI yet: a held call is a deny, never an allow.
-            return Decision(
-                Verdict.DENY,
-                decision.policy,
-                f"{decision.reason} (needs human approval)",
-                decision.hint,
-            )
+        if not isinstance(decision, Decision):
+            raise TypeError(f"policy engine returned {type(decision).__name__}, not Decision")
         return decision
 
     # -- audit + event ----------------------------------------------------
@@ -172,8 +232,14 @@ class DecisionPoint:
         return decision
 
     def _publish(self, request: ToolRequest, decision: Decision) -> None:
+        try:
+            self.sink.publish(self._event(request, decision))
+        except Exception:  # noqa: BLE001 - a display bug must not deny the call
+            return
+
+    def _event(self, request: ToolRequest, decision: Decision) -> Event:
         self._seq += 1
-        event = Event(
+        return Event(
             seq=self._seq,
             ts=datetime.now(UTC).isoformat(),
             caller=request.caller,
@@ -183,10 +249,6 @@ class DecisionPoint:
             policy=decision.policy,
             reason=decision.reason,
         )
-        try:
-            self.sink.publish(event)
-        except Exception:  # noqa: BLE001 - a display bug must not deny the call
-            return
 
 
 def _error_decision(exc: BaseException) -> Decision:
@@ -196,6 +258,7 @@ def _error_decision(exc: BaseException) -> Decision:
 __all__ = [
     "ConsoleSink",
     "DecisionPoint",
+    "FanoutSink",
     "NullAudit",
     "caller_for_token",
     "summarize_args",
