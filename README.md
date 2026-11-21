@@ -15,6 +15,17 @@ deterministic and makes zero model calls, so enforcement never depends on a mode
 The agent is Gemini CLI on **`gemini-3.5-flash-lite`** (AI Studio key). Its built-in tools stay on;
 a `BeforeTool` hook (`demo-repo/.gemini/settings.json`) sends every call to Admit first.
 
+One command (Windows): put your AI Studio key in `.env` as `GEMINI_API_KEY`, then
+
+```powershell
+uv sync
+.\demo.ps1                 # Gemini CLI + gemini-3.5-flash-lite; opens the dashboard
+.\demo.ps1 -Harness agy    # Antigravity CLI + GPT-OSS 120B (Google sign-in)
+```
+
+It starts `admit serve` (log in `.admit/serve.log`), opens the dashboard, runs the agent on
+`demo-repo/`, prints every decision and runs `admit verify`. The same steps by hand:
+
 ```powershell
 uv sync
 Copy-Item .env.example .env        # put your AI Studio key in GEMINI_API_KEY

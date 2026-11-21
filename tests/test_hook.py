@@ -290,3 +290,12 @@ def test_subprocess_invalid_stdin():
     )
     assert r.returncode == 2
     assert one_json(r.stdout)["decision"] == "deny"
+
+
+def test_search_without_dir_defaults_to_workspace():
+    glob = {"tool_name": "glob", "tool_input": {"pattern": "**/conftest.py"}}
+    reqs = hook.map_call("gemini", glob)
+    assert reqs == [{"tool": "fs.search_files", "args": {"path": "."}}]
+    # Reads never get a default path: no path stays no path (the policy denies it).
+    reqs = hook.map_call("gemini", {"tool_name": "read_file", "tool_input": {}})
+    assert reqs == [{"tool": "fs.read_text_file", "args": {}}]
