@@ -1,5 +1,6 @@
 {
   "admit": {
+    "enabled": true,
     "PreToolUse": [
       {
         "matcher": "*",
