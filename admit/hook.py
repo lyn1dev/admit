@@ -297,6 +297,11 @@ def render_deny(harness: str, info: dict[str, Any], *, internal: bool = False) -
     if harness == "antigravity":
         code = 2 if internal else ANTIGRAVITY_DENY_EXIT
         return json.dumps({"decision": "deny", "reason": msg}), code
+    if harness == "gemini" and not internal:
+        # Gemini CLI's documented, preferred block: exit 0 + {"decision": "deny"}; the
+        # reason goes to the agent as a tool error. Internal errors still exit 2, the only
+        # non-zero code Gemini CLI treats as a block (any other code fails open).
+        return json.dumps({"decision": "deny", "reason": msg}), 0
     return msg, 2
 
 
@@ -328,7 +333,7 @@ def main(harness: str, stdin: TextIO | None = None, stdout: TextIO | None = None
     except BaseException:  # pragma: no cover - last resort
         text = json.dumps({"decision": "deny", "reason": "Admit hook crashed"})
         code = 2
-    if harness == "antigravity" or code == 0:
+    if harness in ("antigravity", "gemini") and not (harness == "gemini" and code == 2):
         if text:
             out.write(text + "\n")
             out.flush()

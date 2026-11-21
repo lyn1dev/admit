@@ -242,19 +242,31 @@ def test_gemini_read_many_files_any_deny(fake):
     ]
     payload = {"tool_name": "read_many_files", "tool_input": {"paths": ["a.txt", "b.txt", "c.txt"]}}
     code, out = run("gemini", payload)
-    assert code == 2 and out == ""
+    assert code == 0 and json.loads(out)["decision"] == "deny"
     assert [r["args"]["path"] for r in fake.requests] == ["a.txt", "b.txt"]  # stops at deny
 
 
-def test_gemini_and_claude_deny_stderr(fake, capsys):
+def test_gemini_deny_is_json_exit_0(fake):
+    # Gemini CLI's preferred block: exit 0 + {"decision": "deny"}; reason reaches the agent.
     fake.body = {"decision": "DENY", "policy": "b", "reason": "no", "allowed": False}
-    for h, payload in [
-        ("gemini", {"tool_name": "run_shell_command", "tool_input": {"command": "x"}}),
-        ("claude", {"tool_name": "Bash", "tool_input": {"command": "x"}}),
-    ]:
-        code, out = run(h, payload)
-        assert code == 2 and out == ""
-        assert "no" in capsys.readouterr().err
+    code, out = run("gemini", {"tool_name": "run_shell_command", "tool_input": {"command": "x"}})
+    assert code == 0
+    body = json.loads(out)
+    assert body["decision"] == "deny" and "no" in body["reason"]
+
+
+def test_gemini_internal_error_exits_2(capsys):
+    # Anything but exit 2 fails open in Gemini CLI, so internal errors must exit 2.
+    code, out = run("gemini", "not-json")
+    assert code == 2 and out == ""
+    assert "hook error" in capsys.readouterr().err
+
+
+def test_claude_deny_stderr(fake, capsys):
+    fake.body = {"decision": "DENY", "policy": "b", "reason": "no", "allowed": False}
+    code, out = run("claude", {"tool_name": "Bash", "tool_input": {"command": "x"}})
+    assert code == 2 and out == ""
+    assert "no" in capsys.readouterr().err
 
 
 def test_claude_mapping_and_allow(fake):

@@ -19,9 +19,9 @@ spec:
         request.args.command in [
           "python -m pytest", "python -m pytest -q", "python -m pytest -v",
           "pytest", "pytest -q", "uv run pytest",
-          "pip install -r requirements.txt",
+          "pip install -r requirements.txt", "python -m pip install -r requirements.txt",
           "git status", "git diff"
-        ] || request.args.command.matches("^pip install [A-Za-z0-9_.-]+(==[0-9][A-Za-z0-9.]*)?$")
+        ] || request.args.command.matches("^(python -m )?pip install [A-Za-z0-9_.-]+(==[0-9][A-Za-z0-9.]*)?$")
       message: "Command is not on the shell allowlist"
   validationActions: [Deny]
 
@@ -36,7 +36,7 @@ spec:
     tools: ["shell.run"]
   validations:
     # Any pip install that is not exactly the requirements file is held for a human.
-    - expression: '!request.args.command.matches("^pip install ") || request.args.command == "pip install -r requirements.txt"'
+    - expression: '!request.args.command.matches("^(python -m )?pip install ") || request.args.command in ["pip install -r requirements.txt", "python -m pip install -r requirements.txt"]'
       message: "Installing packages outside requirements.txt needs human approval"
   validationActions: [Warn]
 

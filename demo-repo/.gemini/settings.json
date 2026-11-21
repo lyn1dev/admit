@@ -1,12 +1,19 @@
 {
-  "model": { "name": "gemini-flash-lite-latest" },
-  "mcpServers": {
-    "admit": {
-      "httpUrl": "http://127.0.0.1:8765/mcp",
-      "headers": { "Authorization": "Bearer dev-token-coding-agent" },
-      "timeout": 300000,
-      "trust": true
-    }
-  },
-  "tools": { "core": [] }
+  "model": { "name": "gemini-3.5-flash-lite" },
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "name": "admit",
+            "type": "command",
+            "command": "uv run --project .. admit hook --harness gemini",
+            "timeout": 75000,
+            "description": "Admit: every tool call must pass policy (fail-closed, exit 2)"
+          }
+        ]
+      }
+    ]
+  }
 }

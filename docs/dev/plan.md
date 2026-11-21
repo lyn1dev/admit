@@ -15,6 +15,15 @@ the sprint; nothing is assigned yet.
 > previous version of this file is `plan.pre-antigravity.md.bak`. Antigravity facts and what is
 > still unverified: [api-notes.md section 9](api-notes.md#9-antigravity-cli-agy--harness-for-the-demo).
 
+> **Pivot 2 (2026-11-21, afternoon): the MVP demo runs Gemini CLI on `gemini-3.5-flash-lite`
+> with a paid AI Studio key**, so the cheapest models (the ones that take the bait) are on stage.
+> `agy` with an API key (`--settings '{"modelProvider":"gemini"}'`, per run) lists no flash-lite,
+> and its `customModelsConfig` (a map of name → `{modelName: "gemini-api://.../models/<id>"}`)
+> registered models but every call returned 404. With `tools.core: []` + Admit's MCP gateway,
+> flash-lite ignored the MCP tools and called built-in names, so Gemini CLI keeps its built-ins
+> behind a `BeforeTool` hook → `admit hook --harness gemini` → `/check`. `agy` (Google sign-in,
+> GPT-OSS) stays as the second harness via `.agents/hooks.json`. Verified run: README "Run the demo".
+
 ## 1. The product
 
 **Admit gives coding agents least-privilege policies that harden themselves.** Admit learns a

@@ -5,6 +5,9 @@ CLAUDE.md
 
 # Secrets and local state
 .env
+.env.*
+*.env.bak*
+!.env.example
 !demo-repo/.env
 .admit/
 
