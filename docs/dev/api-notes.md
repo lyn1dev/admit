@@ -488,3 +488,19 @@ path is not documented in the shipped reference, so the plan uses the CLI (`AgyL
 - **But `step_update.tool_info.name` uses different names**: `read_file` / `edit_file` /
   `write_file` with `{"Path": ...}`, and `run_command` with `{"CommandLine": ...}`. Which set the
   `PreToolUse` hook receives is still unknown: the M0 tap hook decides it. Map both.
+
+### Observed 2026-11-21 (afternoon) — PreToolUse payloads, verified with the tap hook
+
+- The hook receives `read_file` / `write_file` / `edit_file` with **absolute** `Path`
+  (forward slashes), and `run_command` with `CommandLine` (+ `WaitMsBeforeAsync`, `toolSummary`).
+  `edit_file` args: `Path`, `Target`, `Replacement`; `write_file`: `Path`, `Content`.
+- `modelName` is the real slug (`gemini-3.8-flash-low`); `cwd` and `workspacePaths[0]` are the workspace.
+- Shell commands run in **PowerShell** on Windows (`Get-ChildItem -Name`, `Select-String ...`).
+- A relative hook command (`uv run --project ../.. admit hook ...` in `demo-repo/.agents/hooks.json`)
+  works: calls reached `admit serve`.
+- Failure matrix: every case blocks in `agy -p`; see `docs/dev/hook-behaviour.md`.
+- API-key mode: `agy --settings '{"modelProvider":"gemini"}' models` (with `GEMINI_API_KEY`) lists
+  `gemini-4-*`, `gemini-3.6/3.7/3.8-flash-*`, `gemini-3.1-pro-*`; no flash-lite, no Claude/GPT-OSS.
+  `customModelsConfig.customModels` is a **map** `{name: ModelInfo}` (`modelName`, `displayName`,
+  `baseUrl`, ...); entries show up in `agy models` but calls returned 404 for every
+  `gemini-api://` URL form tried. `gemini-3.6-flash-low` via the key timed out after 90 s on "say hi".

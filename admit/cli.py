@@ -130,7 +130,9 @@ def hook(
     harness: str = typer.Option("antigravity", "--harness", help="antigravity | gemini | claude"),
 ) -> None:
     """BeforeTool/PreToolUse hook: JSON on stdin, fail-closed (exit 2)."""
-    _todo("hook")
+    from admit.hook import main as hook_main
+
+    raise typer.Exit(hook_main(harness))
 
 
 @app.command()
@@ -145,9 +147,23 @@ def init(
 
 
 @app.command()
-def verify(log: Path = typer.Argument(None)) -> None:
+def verify(
+    log: Path = typer.Argument(None, help="path to a .jsonl audit log (default: newest)"),
+) -> None:
     """Verify the audit hash chain and session signature."""
-    _todo("verify")
+    from admit.audit import latest_log
+    from admit.audit import verify as verify_log
+
+    target = Path(log) if log else latest_log()
+    if target is None:
+        typer.secho("no audit log found in .admit/audit", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    ok, message = verify_log(Path(target))
+    if ok:
+        typer.secho(message, fg=typer.colors.GREEN)
+        return
+    typer.secho(message, fg=typer.colors.RED, err=True)
+    raise typer.Exit(1)
 
 
 @app.command()
