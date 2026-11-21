@@ -1,4 +1,4 @@
-"""`uv run admit ...` entry point. See docs/dev/plan.md."""
+"""``uv run admit ...`` entry point. See docs/dev/plan.md."""
 
 from __future__ import annotations
 
@@ -19,20 +19,28 @@ def serve(
     policies: list[Path] = typer.Option([Path("policies/baseline.yaml")], "--policies", "-p"),
     mode: str = typer.Option("enforce", help="enforce | audit"),
     port: int = typer.Option(8765),
+    pin: bool = typer.Option(False, "--pin", help="record/re-approve tool pins (.admit/pins.json)"),
 ) -> None:
-    """Run the MCP proxy on http://127.0.0.1:<port>/mcp."""
+    """Run the MCP proxy on http://127.0.0.1:<port>/mcp with the dashboard on /."""
     _todo("serve")
 
 
 @app.command()
-def hook() -> None:
-    """BeforeTool hook for built-in tools; reads JSON on stdin. Fail-closed (exit 2)."""
+def hook(
+    harness: str = typer.Option("antigravity", "--harness", help="antigravity | gemini | claude"),
+) -> None:
+    """BeforeTool/PreToolUse hook: JSON on stdin, fail-closed (exit 2)."""
     _todo("hook")
 
 
 @app.command()
-def init(harness: str) -> None:
-    """Route an agent harness (gemini, claude, ...) through Admit."""
+def init(
+    harness: str,
+    print_only: bool = typer.Option(
+        False, "--print", help="print the adapter snippet without writing anything"
+    ),
+) -> None:
+    """Route a harness (antigravity | gemini | claude | pi | mcp) through Admit."""
     _todo("init")
 
 
@@ -49,19 +57,28 @@ def posture(settings: Path) -> None:
 
 
 @app.command()
-def learn(approve: bool = typer.Option(False, "--approve")) -> None:
+def learn(
+    approve: bool = typer.Option(False, "--approve", help="apply the proposed policy diff"),
+) -> None:
     """Policy Author: propose least-privilege policy from audit-mode logs."""
     _todo("learn")
 
 
 @app.command()
-def redteam(policies: Path = typer.Option(Path("policies/naive.yaml"))) -> None:
-    """Red Team loop against a policy file."""
+def redteam(
+    policies: Path = typer.Option(Path("policies/naive.yaml"), help="policy file to attack"),
+) -> None:
+    """Red Team loop against a policy file (max ``MAX_ROUNDS`` rounds)."""
     _todo("redteam")
 
 
 @app.command()
-def demo(step: int) -> None:
+def demo(
+    step: int,
+    replay: bool = typer.Option(
+        False, "--replay", help="serve cached agent responses instead of live model calls"
+    ),
+) -> None:
     """Run one stage of the stage demo (0-4)."""
     _todo("demo")
 
